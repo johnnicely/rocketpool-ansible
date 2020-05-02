@@ -97,6 +97,7 @@ Mappings:
 Resources:
   LogGroup:
     Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
     Properties:
       RetentionInDays: 365
 
@@ -153,6 +154,7 @@ Resources:
 
   KeystoreSecret:
     Type: AWS::SecretsManager::Secret
+    DeletionPolicy: Retain
     Properties:
       Description: Keystore secret for Rocket Pool smart nodes in this region.
       GenerateSecretString:
