@@ -1,0 +1,437 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Metadata:
+  Identifier: rocket-pool-node
+
+Parameters:
+  UseSpotInstance:
+    Type: String
+    Description: Set to 'true' to use spot instances to host your node. If you use spot instances, you will likely incur penalties when instances are reclaimed by AWS - use at your own risk.
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Default: 'false'
+  Ec2KeypairName:
+    Type: String
+    Description: The name of a keypair that you have created in the EC2 console. If you set UseEc2InstanceConnect to 'false', this value should be provided.
+    Default: ''
+  UseEc2InstanceConnect:
+    Type: String
+    Description: Use EC2 Instance Connect to SSH to the smart node.
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Default: 'true'
+  UserIpAddress:
+    Type: String
+    Description: If you want to limit SSH to just your IP address, provide this value (strongly recommended). If your IP address changes, you will need to update the stack with your new IP address to resume SSH access.
+    Default: ''
+  InstanceType:
+    Type: String
+    Description: The class of EC2 instance to create.
+    Default: t3.medium
+  SubnetId:
+    Type: AWS::EC2::Subnet::Id
+    Description: The ID of the VPC subnet where the EC2 instance should be provisioned.
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: The ID of the VPC where the EC2 instance and related resources should be provisioned.
+
+Conditions:
+  Ec2KeypairNameProvidedCondition:
+    !Not [!Equals [!Ref Ec2KeypairName, '']]
+  UserIpAddressProvidedCondition:
+    !Not [!Equals [!Ref UserIpAddress, '']]
+
+Mappings:
+  # Amazon Linux 2 AMI IDs
+  # Retrieved 2020-04-26 from https://aws.amazon.com/amazon-linux-2/release-notes/
+  AmiByRegion:
+    ap-east-1:
+      AmiId: ami-33a7e042
+    ap-northeast-1:
+      AmiId: ami-052652af12b58691f
+    ap-northeast-2:
+      AmiId: ami-0db78afd3d150fc18
+    ap-northeast-3:
+      AmiId: ami-075b14c8e2f90fd84
+    ap-south-1:
+      AmiId: ami-03b5297d565ef30a6
+    ap-southeast-1:
+      AmiId: ami-0cbc6aae997c6538a
+    ap-southest-2:
+      AmiId: ami-08fdde86b93accf1c
+    ca-central-1:
+      AmiId: ami-0bf54ac1b628cf143
+    eu-central-1:
+      AmiId: ami-0ec1ba09723e5bfac
+    eu-north-1:
+      AmiId: ami-0f630db6194a81ad0
+    eu-west-1:
+      AmiId: ami-04d5cc9b88f9d1d39
+    eu-west-2:
+      AmiId: ami-0cb790308f7591fa6
+    eu-west-3:
+      AmiId: ami-07eda9385feb1e969
+    me-south-1:
+      AmiId: ami-05613911cb72781b8
+    sa-east-1:
+      AmiId: ami-0b032e878a66c3b68
+    us-east-1:
+      AmiId: ami-0fc61db8544a617ed
+    us-east-2:
+      AmiId: ami-0e01ce4ee18447327
+    us-west-1:
+      AmiId: ami-09a7fe78668f1e2c0
+    us-west-2:
+      AmiId: ami-0ce21b51cb31a48b8
+    cn-north-1:
+      AmiId: ami-075e747be97c43817
+    cn-northwest-1:
+      AmiId: ami-0e08e7c3821193844
+    us-gov-east-1:
+      AmiId: ami-731af702
+    us-gov-west-1:
+      AmiId: ami-595c7738
+
+Resources:
+  LogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      RetentionInDays: 365
+
+  CloudWatchPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Description: Allow RocketPool smart node to publish logs and metrics to CloudWatch.
+      Path: /rocket-pool/
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action:
+              - logs:CreateLogStream
+              - logs:DescribeLogStreams
+              - logs:PutLogEvents
+            Resource:
+              - !GetAtt LogGroup.Arn
+              - !Sub '${LogGroup.Arn}:*:*'
+          - Effect: Allow
+            Action:
+              - cloudwatch:PutMetricData
+              - ec2:DescribeTags
+              - ec2:DescribeVolumes
+              - logs:DescribeLogGroups
+              - logs:DescribeLogStreams
+            Resource: '*'
+
+  InstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Description: Role used for smart node instance profile.
+      ManagedPolicyArns:
+        - !Ref CloudWatchPolicy
+      Path: /rocket-pool/
+      Tags:
+        - Key: Service
+          Value: rocket-pool
+
+  InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: /rocket-pool/
+      Roles:
+        - !Ref InstanceRole
+
+  KeystoreSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Description: Keystore secret for Rocket Pool smart nodes in this region.
+      GenerateSecretString:
+        GenerateStringKey: KeystorePassword
+        PasswordLength: 32
+        RequireEachIncludedType: true
+        SecretStringTemplate: '{}'
+      Tags:
+        - Key: Service
+          Value: rocket-pool
+
+  InstanceSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: rp-smartnode-eth
+      SecurityGroupEgress:
+        - CidrIp: 0.0.0.0/0
+          Description: Allow all outbound traffic.
+          FromPort: -1
+          IpProtocol: -1
+          ToPort: -1
+      SecurityGroupIngress:
+        - CidrIp: !If
+            - UserIpAddressProvidedCondition
+            - !Sub '${UserIpAddress}/32'
+            - 0.0.0.0/0
+          Description: Allow SSH to instance.
+          FromPort: 22
+          IpProtocol: tcp
+          ToPort: 22
+        - CidrIp: 0.0.0.0/0
+          Description: Ethereum (IPv4, tcp)
+          FromPort: 30303
+          IpProtocol: tcp
+          ToPort: 30303
+        - CidrIp: 0.0.0.0/0
+          Description: Ethereum (IPv4, udp)
+          FromPort: 30303
+          IpProtocol: udp
+          ToPort: 30303
+        - CidrIpv6: ::/0
+          Description: Ethereum (IPv6, tcp)
+          FromPort: 30303
+          IpProtocol: tcp
+          ToPort: 30303
+        - CidrIpv6: ::/0
+          Description: Ethereum (IPv6, udp)
+          FromPort: 30303
+          IpProtocol: udp
+          ToPort: 30303
+      Tags:
+        - Key: Service
+          Value: rocket-pool
+      VpcId: !Ref VpcId
+
+  Instance:
+    Type: AWS::EC2::Instance
+    # TODO: This breaks the instance deployment for some reason, even though cfn-hup successfully signals.
+    # CreationPolicy:
+    #   ResourceSignal:
+    #     Count: 1
+    #     Timeout: PT15M
+    Metadata:
+      AWS::CloudFormation::Init:
+        configSets:
+          default:
+            - 01_setup-cloudwatch-agent
+            - 02_config-cloudwatch-agent
+            - 03_restart-cloudwatch-agent
+          update:
+            - 02_config-cloudwatch-agent
+            - 03_restart-cloudwatch-agent
+        01_setup-cloudwatch-agent:
+          files:
+            '/etc/cfn/cfn-hup.conf':
+              content: !Sub |
+                [main]
+                stack=${AWS::StackId}
+                region=${AWS::Region}
+                interval=1
+              mode: '000400'
+              owner: root
+              group: root
+            '/etc/cfn/hooks.d/amazon-cloudwatch-agent-auto-reloader.conf':
+              content: !Sub |
+                [cfn-auto-reloader-hook]
+                triggers=post.update
+                path=Resources.Instance.Metadata.AWS::CloudFormation::Init.02_config-cloudwatch-agent
+                action=/opt/aws/bin/cfn-init -v --stack ${AWS::StackId} --resource Instance --region ${AWS::Region} --configsets update
+                runas=root
+              mode: '000400'
+              owner: root
+              group: root
+            '/lib/systemd/system/cfn-hup.service':
+              content: |
+                [Unit]
+                Description=cfn-hup daemon
+                [Service]
+                Type=simple
+                ExecStart=/opt/aws/bin/cfn-hup
+                Restart=always
+                [Install]
+                WantedBy=multi-user.target
+          commands:
+            01_enable_cfn_hup:
+              command: !Sub |
+                systemctl enable cfn-hup.service
+            02_start_cfn_hup:
+              command: !Sub |
+                systemctl start cfn-hup.service
+        02_config-cloudwatch-agent:
+          files:
+            '/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json':
+              content: !Sub |
+                {
+                  "logs": {
+                    "logs_collected": {
+                      "files": {
+                        "collect_list": [
+                          {
+                            "file_path": "/var/log/cfn-hup.log",
+                            "log_group_name": "${LogGroup}",
+                            "log_stream_name": "cfn-hup",
+                            "timezone": "UTC"
+                          },
+                          {
+                            "file_path": "/var/log/cfn-init-cmd.log",
+                            "log_group_name": "${LogGroup}",
+                            "log_stream_name": "cfn-init-cmd",
+                            "timezone": "UTC"
+                          },
+                          {
+                            "file_path": "/var/log/cfn-init.log",
+                            "log_group_name": "${LogGroup}",
+                            "log_stream_name": "cfn-init",
+                            "timezone": "UTC"
+                          },
+                          {
+                            "file_path": "/var/log/cfn-wire.log",
+                            "log_group_name": "${LogGroup}",
+                            "log_stream_name": "cfn-wire",
+                            "timezone": "UTC"
+                          },
+                          {
+                            "file_path": "/var/log/cloud-init.log",
+                            "log_group_name": "${LogGroup}",
+                            "log_stream_name": "cloud-init",
+                            "timezone": "UTC"
+                          },
+                          {
+                            "file_path": "/var/log/cloud-init-output.log",
+                            "log_group_name": "${LogGroup}",
+                            "log_stream_name": "cloud-init-output",
+                            "timezone": "UTC"
+                          },
+                          {
+                            "file_path": "/var/log/secure",
+                            "log_group_name": "${LogGroup}",
+                            "log_stream_name": "secure",
+                            "timezone": "UTC"
+                          },
+                          {
+                            "file_path": "/var/log/yum.log",
+                            "log_group_name": "${LogGroup}",
+                            "log_stream_name": "yum",
+                            "timezone": "UTC"
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  "metrics": {
+                    "append_dimensions": {
+                      "AutoScalingGroupName": "${!aws:AutoScalingGroupName}",
+                      "ImageId": "${!aws:ImageId}",
+                      "InstanceId": "${!aws:InstanceId}",
+                      "InstanceType": "${!aws:InstanceType}"
+                    },
+                    "metrics_collected": {
+                      "cpu": {
+                        "measurement": [
+                          "cpu_usage_active"
+                        ],
+                        "append_dimensions": {
+                          "Stack": "${AWS::StackName}",
+                          "Service": "rocket-pool"
+                        }
+                      },
+                      "disk": {
+                        "measurement": [
+                          "used_percent"
+                        ],
+                        "append_dimensions": {
+                          "Stack": "${AWS::StackName}",
+                          "Service": "rocket-pool"
+                        }
+                      },
+                      "mem": {
+                        "measurement": [
+                          "mem_used_percent"
+                        ],
+                        "append_dimensions": {
+                          "Stack": "${AWS::StackName}",
+                          "Service": "rocket-pool"
+                        }
+                      },
+                      "swap": {
+                        "measurement": [
+                          "swap_used_percent"
+                        ],
+                        "append_dimensions": {
+                          "Stack": "${AWS::StackName}",
+                          "Service": "rocket-pool"
+                        }
+                      },
+                      "net": {
+                        "measurement": [
+                          "net_bytes_sent",
+                          "net_bytes_recv"
+                        ],
+                        "append_dimensions": {
+                          "Stack": "${AWS::StackName}",
+                          "Service": "rocket-pool"
+                        }
+                      }
+                    }
+                  }
+                }
+        03_restart-cloudwatch-agent:
+          commands:
+            01_stop-service:
+              command: /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a stop
+            02_start-service:
+              command: /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s
+    Properties:
+      EbsOptimized: true
+      IamInstanceProfile: !Ref InstanceProfile
+      ImageId: !FindInMap
+        - AmiByRegion
+        - !Ref AWS::Region
+        - AmiId
+      InstanceInitiatedShutdownBehavior: stop
+      InstanceType: !Ref InstanceType
+      KeyName: !If
+        - Ec2KeypairNameProvidedCondition
+        - !Ref Ec2KeypairName
+        - !Ref AWS::NoValue
+      SecurityGroupIds:
+        - !GetAtt InstanceSecurityGroup.GroupId
+      SubnetId: !Ref SubnetId
+      Tags:
+        - Key: Service
+          Value: rocket-pool
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          rpm -Uvh https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm
+          /opt/aws/bin/cfn-init -v --stack ${AWS::StackId} --resource Instance --region ${AWS::Region} --configsets default
+          /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackId} --resource Instance --region ${AWS::Region}
+
+  InstanceElasticIp:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      InstanceId: !Ref Instance
+      Tags:
+        - Key: Service
+          Value: rocket-pool
+
+Outputs:
+  LogGroupName:
+    Description: The log group for the instance.
+    Value: !Ref LogGroup
+  InstanceId:
+    Description: The ID of the EC2 instance created by this stack.
+    Value: !Ref Instance
+  InstanceIpAddress:
+    Description: The Elastic IP address assigned to the EC2 instance created by this stack.
+    Value: !Ref InstanceElasticIp
+  InstanceUsername:
+    Description: The username to use when opening an SSH session.
+    Value: ec2-user

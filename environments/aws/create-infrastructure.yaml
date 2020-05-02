@@ -1,0 +1,39 @@
+---
+- hosts: localhost
+  connection: local
+  gather_facts: false
+  vars_files:
+    - config.yaml
+  tasks:
+    - name: deploy stack
+      loop: "{{ aws.networks | default([]) }}"
+      register: aws_network_stacks
+      cloudformation:
+        profile: "{{ item.profile | default(aws.defaults.profile) }}"
+        capabilities:
+          - CAPABILITY_IAM
+          - CAPABILITY_NAMED_IAM
+          - CAPABILITY_AUTO_EXPAND
+        on_create_failure: DELETE
+        region: "{{ item.region }}"
+        stack_name: "{{ item.stack_name }}"
+        state: present
+        template: ./templates/network.yaml
+    - name: deploy ec2 stack for each instance configuration
+      loop: "{{ aws.networks | subelements('instances') }}"
+      cloudformation:
+        profile: "{{ item.1.profile | default(aws.defaults.profile) }}"
+        capabilities:
+          - CAPABILITY_IAM
+          - CAPABILITY_NAMED_IAM
+          - CAPABILITY_AUTO_EXPAND
+        on_create_failure: DELETE
+        region: "{{ item.0.region }}"
+        stack_name: "{{ item.1.stack_name }}"
+        state: present
+        template: ./templates/ec2-instance.yaml
+        template_parameters:
+          InstanceType: "{{ item.1.instance_type | default(omit) }}"
+          UserIpAddress: "{{ item.1.ssh_ingress_ip | default(aws.defaults.instances.ssh_ingress_ip, true) | default(omit) }}"
+          SubnetId: "{{ aws_network_stacks | json_query('results[?item.stack_name==`' ~ item.0.stack_name ~ '`] | [?item.region==`' ~ item.0.region ~ '`].stack_outputs.SubnetId | [0]') }}"
+          VpcId: "{{ aws_network_stacks | json_query('results[?item.stack_name==`' ~ item.0.stack_name ~ '`] | [?item.region==`' ~ item.0.region ~ '`].stack_outputs.VpcId | [0]') }}"

@@ -1,0 +1,69 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Metadata:
+  Identifier: rocket-pool-network
+
+Resources:
+  Vpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      InstanceTenancy: default
+      Tags:
+        - Key: Service
+          Value: rocket-pool
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Service
+          Value: rocket-pool
+
+  GatewayVpcAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    DependsOn: InternetGateway
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref Vpc
+
+  Subnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      Tags:
+        - Key: Service
+          Value: rocket-pool
+      VpcId: !Ref Vpc
+
+  RouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      Tags:
+        - Key: Service
+          Value: rocket-pool
+      VpcId: !Ref Vpc
+
+  # TODO: Network ACL
+
+  SubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref RouteTable
+      SubnetId: !Ref Subnet
+
+  InternetGatewayRoute:
+    Type: AWS::EC2::Route
+    DependsOn: GatewayVpcAttachment
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+      RouteTableId: !Ref RouteTable
+
+Outputs:
+  SubnetId:
+    Description: The ID of the subbnet where EC2 instances can be provisioned.
+    Value: !Ref Subnet
+  VpcId:
+    Description: The ID of the VPC where EC2 instances and related resources can be provisioned.
+    Value: !Ref Vpc
