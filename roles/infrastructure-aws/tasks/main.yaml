@@ -1,0 +1,16 @@
+- name: get configuration
+  include_vars: "{{ playbook_dir }}/config.yaml"
+- name: deploy aws network stack
+  loop: "{{ aws.networks | default([]) }}"
+  register: aws_network_stacks
+  cloudformation:
+    profile: "{{ item.profile | default(aws.general.profile) }}"
+    capabilities:
+      - CAPABILITY_IAM
+      - CAPABILITY_NAMED_IAM
+      - CAPABILITY_AUTO_EXPAND
+    on_create_failure: DELETE
+    region: "{{ item.region }}"
+    stack_name: "network-{{ item.stack_name }}"
+    state: present
+    template: "{{ role_path }}/files/network.yaml"

@@ -1,0 +1,20 @@
+aws:
+  general:
+    profile: default
+    instances:
+      key_name: ''
+      instance_type: ''
+      ssh_ingress_ip: ''
+  networks:
+    - region: 'us-east-1'
+      stack_name: 'rp-network'
+      instances:
+        - stack_name: 'rp-use1-sn-1'
+
+azure:
+  defaults:
+    placeholder: 'todo'
+
+bare_hosts:
+  defaults:
+    placeholder: 'todo'
