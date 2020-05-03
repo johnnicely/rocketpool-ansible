@@ -2,14 +2,16 @@ aws:
   general:
     profile: default
     instances:
-      key_name: ''
       instance_type: ''
       ssh_ingress_ip: ''
   networks:
     - region: 'us-east-1'
-      stack_name: 'rp-network'
+      stack_name: 'rp'
       instances:
         - stack_name: 'rp-use1-sn-1'
+          keypair:
+            aws_name: 'name-of-ec2-keypair'
+            local_path: '/path/to/.ssh/name-of-ec2-keypair.pem'
 
 azure:
   defaults:

@@ -13,19 +13,7 @@ Parameters:
     Default: 'false'
   Ec2KeypairName:
     Type: String
-    Description: The name of a keypair that you have created in the EC2 console. If you set UseEc2InstanceConnect to 'false', this value should be provided.
-    Default: ''
-  UseEc2InstanceConnect:
-    Type: String
-    Description: Use EC2 Instance Connect to SSH to the smart node.
-    AllowedValues:
-      - 'true'
-      - 'false'
-    Default: 'true'
-  UserIpAddress:
-    Type: String
-    Description: If you want to limit SSH to just your IP address, provide this value (strongly recommended). If your IP address changes, you will need to update the stack with your new IP address to resume SSH access.
-    Default: ''
+    Description: The name of a keypair that you have created in the EC2 console.
   InstanceType:
     Type: String
     Description: The class of EC2 instance to create.
@@ -33,13 +21,15 @@ Parameters:
   SubnetId:
     Type: AWS::EC2::Subnet::Id
     Description: The ID of the VPC subnet where the EC2 instance should be provisioned.
+  UserIpAddress:
+    Type: String
+    Description: If you want to limit SSH to just your IP address, provide this value (strongly recommended). If your IP address changes, you will need to update the stack with your new IP address to resume SSH access.
+    Default: ''
   VpcId:
     Type: AWS::EC2::VPC::Id
     Description: The ID of the VPC where the EC2 instance and related resources should be provisioned.
 
 Conditions:
-  Ec2KeypairNameProvidedCondition:
-    !Not [!Equals [!Ref Ec2KeypairName, '']]
   UserIpAddressProvidedCondition:
     !Not [!Equals [!Ref UserIpAddress, '']]
 
@@ -398,10 +388,7 @@ Resources:
         - AmiId
       InstanceInitiatedShutdownBehavior: stop
       InstanceType: !Ref InstanceType
-      KeyName: !If
-        - Ec2KeypairNameProvidedCondition
-        - !Ref Ec2KeypairName
-        - !Ref AWS::NoValue
+      KeyName: !Ref Ec2KeypairName
       SecurityGroupIds:
         - !GetAtt InstanceSecurityGroup.GroupId
       SubnetId: !Ref SubnetId
