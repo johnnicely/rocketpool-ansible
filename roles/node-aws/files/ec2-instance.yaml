@@ -4,13 +4,6 @@ Metadata:
   Identifier: rocket-pool-node
 
 Parameters:
-  UseSpotInstance:
-    Type: String
-    Description: Set to 'true' to use spot instances to host your node. If you use spot instances, you will likely incur penalties when instances are reclaimed by AWS - use at your own risk.
-    AllowedValues:
-      - 'true'
-      - 'false'
-    Default: 'false'
   Ec2KeypairName:
     Type: String
     Description: The name of a keypair that you have created in the EC2 console.
