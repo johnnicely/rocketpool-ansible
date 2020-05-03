@@ -27,55 +27,47 @@ Conditions:
     !Not [!Equals [!Ref UserIpAddress, '']]
 
 Mappings:
-  # Amazon Linux 2 AMI IDs
-  # Retrieved 2020-04-26 from https://aws.amazon.com/amazon-linux-2/release-notes/
+  # Ubuntu 18.04 LTS (EBS, HVM, SSD) AMI IDs
+  # Retrieved 2020-05-02 from https://cloud-images.ubuntu.com/locator/ec2/
   AmiByRegion:
     ap-east-1:
-      AmiId: ami-33a7e042
+      AmiId: ami-c790d6b6
     ap-northeast-1:
-      AmiId: ami-052652af12b58691f
+      AmiId: ami-0278fe6949f6b1a06
     ap-northeast-2:
-      AmiId: ami-0db78afd3d150fc18
+      AmiId: ami-00edfb46b107f643c
     ap-northeast-3:
-      AmiId: ami-075b14c8e2f90fd84
+      AmiId: ami-00eac2261db3c9df5
     ap-south-1:
-      AmiId: ami-03b5297d565ef30a6
+      AmiId: ami-0914f03407aa25fb8
     ap-southeast-1:
-      AmiId: ami-0cbc6aae997c6538a
+      AmiId: ami-0f7719e8b7ba25c61
     ap-southest-2:
-      AmiId: ami-08fdde86b93accf1c
+      AmiId: ami-04fcc97b5f6edcd89
     ca-central-1:
-      AmiId: ami-0bf54ac1b628cf143
+      AmiId: ami-0edd51cc29813e254
     eu-central-1:
-      AmiId: ami-0ec1ba09723e5bfac
+      AmiId: ami-0e342d72b12109f91
     eu-north-1:
-      AmiId: ami-0f630db6194a81ad0
+      AmiId: ami-050981837962d44ac
     eu-west-1:
-      AmiId: ami-04d5cc9b88f9d1d39
+      AmiId: ami-0701e7be9b2a77600
     eu-west-2:
-      AmiId: ami-0cb790308f7591fa6
+      AmiId: ami-0eb89db7593b5d434
     eu-west-3:
-      AmiId: ami-07eda9385feb1e969
+      AmiId: ami-08c757228751c5335
     me-south-1:
-      AmiId: ami-05613911cb72781b8
+      AmiId: ami-051274f257aba97f9
     sa-east-1:
-      AmiId: ami-0b032e878a66c3b68
+      AmiId: ami-077d5d3682940b34a
     us-east-1:
-      AmiId: ami-0fc61db8544a617ed
+      AmiId: ami-085925f297f89fce1
     us-east-2:
-      AmiId: ami-0e01ce4ee18447327
+      AmiId: ami-07c1207a9d40bc3bd
     us-west-1:
-      AmiId: ami-09a7fe78668f1e2c0
+      AmiId: ami-0f56279347d2fa43e
     us-west-2:
-      AmiId: ami-0ce21b51cb31a48b8
-    cn-north-1:
-      AmiId: ami-075e747be97c43817
-    cn-northwest-1:
-      AmiId: ami-0e08e7c3821193844
-    us-gov-east-1:
-      AmiId: ami-731af702
-    us-gov-west-1:
-      AmiId: ami-595c7738
+      AmiId: ami-003634241a8fcdec0
 
 Resources:
   InstanceRole:
