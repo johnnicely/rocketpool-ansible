@@ -85,37 +85,6 @@ Mappings:
       AmiId: ami-595c7738
 
 Resources:
-  LogGroup:
-    Type: AWS::Logs::LogGroup
-    DeletionPolicy: Retain
-    Properties:
-      RetentionInDays: 365
-
-  CloudWatchPolicy:
-    Type: AWS::IAM::ManagedPolicy
-    Properties:
-      Description: Allow RocketPool smart node to publish logs and metrics to CloudWatch.
-      Path: /rocket-pool/
-      PolicyDocument:
-        Version: 2012-10-17
-        Statement:
-          - Effect: Allow
-            Action:
-              - logs:CreateLogStream
-              - logs:DescribeLogStreams
-              - logs:PutLogEvents
-            Resource:
-              - !GetAtt LogGroup.Arn
-              - !Sub '${LogGroup.Arn}:*:*'
-          - Effect: Allow
-            Action:
-              - cloudwatch:PutMetricData
-              - ec2:DescribeTags
-              - ec2:DescribeVolumes
-              - logs:DescribeLogGroups
-              - logs:DescribeLogStreams
-            Resource: '*'
-
   InstanceRole:
     Type: AWS::IAM::Role
     Properties:
@@ -128,8 +97,6 @@ Resources:
             Action:
               - sts:AssumeRole
       Description: Role used for smart node instance profile.
-      ManagedPolicyArns:
-        - !Ref CloudWatchPolicy
       Path: /rocket-pool/
       Tags:
         - Key: Service
@@ -202,183 +169,6 @@ Resources:
 
   Instance:
     Type: AWS::EC2::Instance
-    # TODO: This breaks the instance deployment for some reason, even though cfn-hup successfully signals.
-    # CreationPolicy:
-    #   ResourceSignal:
-    #     Count: 1
-    #     Timeout: PT15M
-    Metadata:
-      AWS::CloudFormation::Init:
-        configSets:
-          default:
-            - 01_setup-cloudwatch-agent
-            - 02_config-cloudwatch-agent
-            - 03_restart-cloudwatch-agent
-          update:
-            - 02_config-cloudwatch-agent
-            - 03_restart-cloudwatch-agent
-        01_setup-cloudwatch-agent:
-          files:
-            '/etc/cfn/cfn-hup.conf':
-              content: !Sub |
-                [main]
-                stack=${AWS::StackId}
-                region=${AWS::Region}
-                interval=1
-              mode: '000400'
-              owner: root
-              group: root
-            '/etc/cfn/hooks.d/amazon-cloudwatch-agent-auto-reloader.conf':
-              content: !Sub |
-                [cfn-auto-reloader-hook]
-                triggers=post.update
-                path=Resources.Instance.Metadata.AWS::CloudFormation::Init.02_config-cloudwatch-agent
-                action=/opt/aws/bin/cfn-init -v --stack ${AWS::StackId} --resource Instance --region ${AWS::Region} --configsets update
-                runas=root
-              mode: '000400'
-              owner: root
-              group: root
-            '/lib/systemd/system/cfn-hup.service':
-              content: |
-                [Unit]
-                Description=cfn-hup daemon
-                [Service]
-                Type=simple
-                ExecStart=/opt/aws/bin/cfn-hup
-                Restart=always
-                [Install]
-                WantedBy=multi-user.target
-          commands:
-            01_enable_cfn_hup:
-              command: !Sub |
-                systemctl enable cfn-hup.service
-            02_start_cfn_hup:
-              command: !Sub |
-                systemctl start cfn-hup.service
-        02_config-cloudwatch-agent:
-          files:
-            '/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json':
-              content: !Sub |
-                {
-                  "logs": {
-                    "logs_collected": {
-                      "files": {
-                        "collect_list": [
-                          {
-                            "file_path": "/var/log/cfn-hup.log",
-                            "log_group_name": "${LogGroup}",
-                            "log_stream_name": "cfn-hup",
-                            "timezone": "UTC"
-                          },
-                          {
-                            "file_path": "/var/log/cfn-init-cmd.log",
-                            "log_group_name": "${LogGroup}",
-                            "log_stream_name": "cfn-init-cmd",
-                            "timezone": "UTC"
-                          },
-                          {
-                            "file_path": "/var/log/cfn-init.log",
-                            "log_group_name": "${LogGroup}",
-                            "log_stream_name": "cfn-init",
-                            "timezone": "UTC"
-                          },
-                          {
-                            "file_path": "/var/log/cfn-wire.log",
-                            "log_group_name": "${LogGroup}",
-                            "log_stream_name": "cfn-wire",
-                            "timezone": "UTC"
-                          },
-                          {
-                            "file_path": "/var/log/cloud-init.log",
-                            "log_group_name": "${LogGroup}",
-                            "log_stream_name": "cloud-init",
-                            "timezone": "UTC"
-                          },
-                          {
-                            "file_path": "/var/log/cloud-init-output.log",
-                            "log_group_name": "${LogGroup}",
-                            "log_stream_name": "cloud-init-output",
-                            "timezone": "UTC"
-                          },
-                          {
-                            "file_path": "/var/log/secure",
-                            "log_group_name": "${LogGroup}",
-                            "log_stream_name": "secure",
-                            "timezone": "UTC"
-                          },
-                          {
-                            "file_path": "/var/log/yum.log",
-                            "log_group_name": "${LogGroup}",
-                            "log_stream_name": "yum",
-                            "timezone": "UTC"
-                          }
-                        ]
-                      }
-                    }
-                  },
-                  "metrics": {
-                    "append_dimensions": {
-                      "AutoScalingGroupName": "${!aws:AutoScalingGroupName}",
-                      "ImageId": "${!aws:ImageId}",
-                      "InstanceId": "${!aws:InstanceId}",
-                      "InstanceType": "${!aws:InstanceType}"
-                    },
-                    "metrics_collected": {
-                      "cpu": {
-                        "measurement": [
-                          "cpu_usage_active"
-                        ],
-                        "append_dimensions": {
-                          "Stack": "${AWS::StackName}",
-                          "Service": "rocket-pool"
-                        }
-                      },
-                      "disk": {
-                        "measurement": [
-                          "used_percent"
-                        ],
-                        "append_dimensions": {
-                          "Stack": "${AWS::StackName}",
-                          "Service": "rocket-pool"
-                        }
-                      },
-                      "mem": {
-                        "measurement": [
-                          "mem_used_percent"
-                        ],
-                        "append_dimensions": {
-                          "Stack": "${AWS::StackName}",
-                          "Service": "rocket-pool"
-                        }
-                      },
-                      "swap": {
-                        "measurement": [
-                          "swap_used_percent"
-                        ],
-                        "append_dimensions": {
-                          "Stack": "${AWS::StackName}",
-                          "Service": "rocket-pool"
-                        }
-                      },
-                      "net": {
-                        "measurement": [
-                          "net_bytes_sent",
-                          "net_bytes_recv"
-                        ],
-                        "append_dimensions": {
-                          "Stack": "${AWS::StackName}",
-                          "Service": "rocket-pool"
-                        }
-                      }
-                    }
-                  }
-                }
-        03_restart-cloudwatch-agent:
-          commands:
-            01_stop-service:
-              command: /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a stop
-            02_start-service:
-              command: /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s
     Properties:
       EbsOptimized: true
       IamInstanceProfile: !Ref InstanceProfile
@@ -395,12 +185,6 @@ Resources:
       Tags:
         - Key: Service
           Value: rocket-pool
-      UserData:
-        Fn::Base64: !Sub |
-          #!/bin/bash
-          rpm -Uvh https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm
-          /opt/aws/bin/cfn-init -v --stack ${AWS::StackId} --resource Instance --region ${AWS::Region} --configsets default
-          /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackId} --resource Instance --region ${AWS::Region}
 
   InstanceElasticIp:
     Type: AWS::EC2::EIP
@@ -412,9 +196,6 @@ Resources:
           Value: rocket-pool
 
 Outputs:
-  LogGroupName:
-    Description: The log group for the instance.
-    Value: !Ref LogGroup
   InstanceId:
     Description: The ID of the EC2 instance created by this stack.
     Value: !Ref Instance
