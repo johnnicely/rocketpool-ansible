@@ -189,4 +189,4 @@ Outputs:
     Value: !Ref InstanceElasticIp
   InstanceUsername:
     Description: The username to use when opening an SSH session.
-    Value: ec2-user
+    Value: ubuntu
