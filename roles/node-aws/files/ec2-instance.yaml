@@ -171,22 +171,13 @@ Resources:
         - Key: Service
           Value: rocket-pool
 
-  InstanceElasticIp:
-    Type: AWS::EC2::EIP
-    Properties:
-      Domain: vpc
-      InstanceId: !Ref Instance
-      Tags:
-        - Key: Service
-          Value: rocket-pool
-
 Outputs:
   InstanceId:
     Description: The ID of the EC2 instance created by this stack.
     Value: !Ref Instance
   InstanceIpAddress:
     Description: The Elastic IP address assigned to the EC2 instance created by this stack.
-    Value: !Ref InstanceElasticIp
+    Value: !GetAtt Instance.PublicIp
   InstanceUsername:
     Description: The username to use when opening an SSH session.
     Value: ubuntu
