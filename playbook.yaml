@@ -4,3 +4,8 @@
   gather_facts: false
   roles:
     - role: node-aws
+
+- hosts: all
+  roles:
+    - role: node-all
+      when: ansible_distribution in ['Ubuntu', 'MacOSX']
