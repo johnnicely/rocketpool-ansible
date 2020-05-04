@@ -16,6 +16,16 @@
         host: "{{ ansible_host }}"
 
 - hosts: all
+  gather_facts: no
+  tasks:
+    - name: symlink /usr/bin/python -> /usr/bin/python3
+      become: true
+      raw: |
+        if [ -f /usr/bin/python3 ] && [ ! -f /usr/bin/python ]; then
+          ln --symbolic /usr/bin/python3 /usr/bin/python;
+        fi
+
+- hosts: all
   roles:
     - role: node-all
       when: ansible_distribution in ['Ubuntu', 'MacOSX']
