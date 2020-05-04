@@ -3,6 +3,11 @@ AWSTemplateFormatVersion: '2010-09-09'
 Metadata:
   Identifier: rocket-pool-network
 
+Parameters:
+  AvailabilityZone:
+    Type: AWS::EC2::AvailabilityZone::Name
+    Description: The availability zone where subnet should be created.
+
 Resources:
   Vpc:
     Type: AWS::EC2::VPC
@@ -30,6 +35,7 @@ Resources:
   Subnet:
     Type: AWS::EC2::Subnet
     Properties:
+      AvailabilityZone: !Ref AvailabilityZone
       CidrBlock: 10.0.0.0/16
       MapPublicIpOnLaunch: true
       Tags:

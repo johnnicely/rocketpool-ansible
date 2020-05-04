@@ -6,6 +6,7 @@ aws:
       ssh_ingress_ip: ''
   networks:
     - region: 'us-east-1'
+      availability_zone: 'us-east-1a'
       stack_name: 'rp'
       instances:
         - stack_name: 'rp-use1-sn-1'

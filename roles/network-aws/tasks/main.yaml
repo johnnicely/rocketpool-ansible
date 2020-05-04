@@ -14,3 +14,5 @@
     stack_name: "network-{{ item.stack_name }}"
     state: present
     template: "{{ role_path }}/files/network.yaml"
+    template_parameters:
+      AvailabilityZone: "{{ item.availability_zone }}"
