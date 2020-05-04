@@ -44,7 +44,7 @@
       apt:
         name:
           - docker-ce
-          - docker-compose
+          - python3-pip
         state: latest
         update_cache: yes
     - name: add docker group
@@ -61,6 +61,9 @@
       file:
         path: /var/run/docker.sock
         mode: '666'
+    - name: install docker-compose
+      pip:
+        name: docker-compose
 
 - name: install macos dependencies
   when: ansible_facts['distribution'] == 'MacOSX'
@@ -78,7 +81,7 @@
 
 - name: create rocket pool settings.yaml
   file:
-    path: "{{ ansible_facts['user_dir'] }}/.rocketpool/settings.yaml"
+    path: "{{ ansible_facts['user_dir'] }}/.rocketpool/settings.yml"
     state: touch
 
 - name: copy rocket pool data
