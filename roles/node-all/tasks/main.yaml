@@ -1,0 +1,149 @@
+---
+- name: make temporary directory
+  register: temporary_directory
+  tempfile:
+    state: directory
+
+- name: unarchive rocket pool tarball
+  unarchive:
+    remote_src: yes
+    src: https://github.com/rocket-pool/smartnode-install/releases/latest/download/rp-smartnode-install.tar.xz
+    dest: "{{ temporary_directory.path }}"
+    mode: 'u+rwX,go+rX,go-w'
+    extra_opts:
+      - --strip-components=1
+
+- name: stat network id path
+  register: network_id_st
+  stat:
+    path: "{{ temporary_directory.path }}/files/rocketpool/network/{{ rocket_pool_network_id }}"
+
+- name: fail if network id is invalid
+  fail:
+    msg: "'{{ rocket_pool_network_id }}' is not a valid network ID"
+  when: network_id_st.stat.exists is not true
+
+- name: debug msg ansible_facts
+  become: yes
+  debug:
+    msg: "{{ ansible_facts }}"
+
+- name: install ubuntu dependencies
+  when: ansible_facts['lsb']['id'] == 'Ubuntu'
+  become: yes
+  block:
+    - name: add docker aptitude repo key
+      apt_key:
+        url: https://download.docker.com/linux/ubuntu/gpg
+    - name: add docker aptitude repo
+      apt_repository:
+        repo: "deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ ansible_facts['lsb']['codename'] }} stable"
+        state: present
+        update_cache: no
+    - name: install docker
+      apt:
+        name:
+          - docker-ce
+          - python3-pip
+        state: latest
+        update_cache: yes
+    - name: add docker group
+      group:
+        name: docker
+        state: present
+    - name: add ubuntu user to docker group
+      user:
+        name: "{{ ansible_facts['user_id'] }}"
+        append: yes
+        groups:
+          - docker
+    - name: set permissions on docker sock
+      file:
+        path: /var/run/docker.sock
+        mode: '666'
+    - name: install docker-compose
+      pip:
+        name: docker-compose
+
+- name: install macos dependencies
+  when: ansible_facts['distribution'] == 'MacOSX'
+  become: yes
+  block:
+    - name: install docker cask
+      homebrew_cask:
+        name: docker
+        state: upgraded
+      
+- name: create rocket pool configuration directory
+  file:
+    path: "{{ ansible_facts['user_dir'] }}/.rocketpool/data"
+    state: directory
+
+- name: create rocket pool settings.yaml
+  file:
+    path: "{{ ansible_facts['user_dir'] }}/.rocketpool/settings.yml"
+    state: touch
+
+- name: copy rocket pool data
+  copy:
+    src: "{{ temporary_directory.path }}/files/rocketpool/shared/"
+    dest: "{{ ansible_facts['user_dir'] }}/.rocketpool/"
+    remote_src: yes
+    mode: preserve
+
+- name: copy eth network data
+  copy:
+    src: "{{ temporary_directory.path }}/files/rocketpool/network/{{ rocket_pool_network_id }}/"
+    dest: "{{ ansible_facts['user_dir'] }}/.rocketpool/"
+    remote_src: yes
+    mode: preserve
+
+- name: get list of profile paths
+  register: profile_files
+  find:
+    hidden: yes
+    paths:
+      - "{{ ansible_facts['user_dir'] }}"
+    patterns:
+      - ".bashrc"
+      - ".bash_profile"
+      - ".profile"
+
+- name: export RP_PATH
+  loop: "{{ profile_files.files }}"
+  lineinfile:
+    backup: yes
+    path: "{{ item.path }}"
+    regexp: "export RP_PATH"
+    line: "export RP_PATH={{ ansible_facts['user_dir'] }}/.rocketpool"
+
+- name: get list of shell scripts
+  register: shell_scripts
+  find:
+    paths:
+      - "{{ ansible_facts['user_dir'] }}/.rocketpool"
+    patterns:
+      - '*-exec.sh'
+
+- name: make shell scripts executable
+  loop: "{{ shell_scripts.files }}"
+  file:
+    path: "{{ item.path }}"
+    mode: '+x'
+
+- name: pull rocket pool docker image
+  docker_image:
+    name: rocketpool/smartnode:v0.0.1
+    source: pull
+
+- name: create user bin directory
+  file:
+    path: "{{ ansible_facts['user_dir'] }}/bin"
+    state: directory
+
+- name: unarchive rocket pool binaries
+  unarchive:
+    remote_src: yes
+    src: "https://github.com/rocket-pool/smartnode-install/releases/download/0.0.2/rocketpool-{{ ansible_facts['system'] }}-{{ ansible_facts['architecture'] }}.tar.xz"
+    dest: "{{ ansible_facts['user_dir'] }}/bin/"
+    mode: '+x'
