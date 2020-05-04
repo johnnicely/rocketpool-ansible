@@ -1,9 +1,19 @@
 ---
 - hosts: localhost
   connection: local
-  gather_facts: false
+  gather_facts: no
   roles:
     - role: node-aws
+
+- hosts: all
+  connection: local
+  gather_facts: no
+  tasks:
+    - name: wait for all hosts to become available
+      wait_for:
+        timeout: 300
+        port: 22
+        host: "{{ ansible_host }}"
 
 - hosts: all
   roles:
